@@ -1,0 +1,157 @@
+---
+title: "Generalized Linear Models Analysis"
+output: word_document
+---
+******
+Examining how the risk of damage is related to the three variables of type of ship, year and period.
+6 observations should not be included in the model, due to the months of service being 0 and where one observation has been accidentally inputted as 0.
+Response = Number of damage incidents (Inc) modeled by a Poisson GLM.
+Variables type of ship, year, and period are factors.
+```{r}
+library(MASS) 
+data(ships) #Loading in specified data set
+summary(ships) #Checking the basic summary statistics of the variables of interest
+```
+* There seems to be nothing unusual with the variables: type, year, period and incidents
+
+Need to eliminate the 6 observations with months of service equal to 0
+```{r}
+shipsnew <- ships[-c(7,15,23,31,34,39),] #removing observations from data set and naming the new data set 'shipsnew'
+summary(shipsnew) #Checking summary statistics once again, to look for any significant changes. None are present
+```
+
+Fitting a Poisson GLM model to this data set to evaluate number of damage incidents by type of ship, year and period.
+```{r}
+glm1 <- glm(formula = incidents ~ factor(type) + factor(year) + factor(period), family = poisson, data = shipsnew, offset = log(service)) #using glm function to create the model from a poisson family, using the shipsnew data set with natural log of service being the offset
+#An offset variable is used to standardize the count data into rate per months in service, to give a more fair view of the number of damage incidents
+#incidents is the response variable on the left, and everything on the right of '~' is the linear predictor. factor() used to assign the type of explanatory variable to be a factor/categorical variable
+summary(glm1) #Examining the significance of explanatory variables and the deviance
+qchisq(.95,8) #Quantile of Chisq-distribution with 95% significance level and 8 degrees of freedom
+```
+**Key points to make**
+
+* The $\chi_{test}$ = 146.328 - 38.695 = 107.633 > $\chi_{crit:df=33-25=8}$ = 15.50731, meaning that we prefer the saturated model to the null model.
+* The estimate of coefficients for the factor categories; type D, type E, and marginally type C, are not significantly contributing to the prediction of the response variable.
+* The factor year and period both have significant estimates with p-values < 0.05 for all but for the category year(75)
+* The AIC is 154.56, the lower value the more efficient the model is at predicting the response variable
+* **Since, most coefficients for factor 'type' have p-values > 0.05, I decided to refit the model without the factor 'type'**
+
+
+```{r}
+glm2 <- glm(formula = incidents ~ factor(year) + factor(period), family = poisson, data = shipsnew, offset = log(service)) #using glm function to create the model from a poisson family, using the shipsnew data set with natural log of service being the offset, but without the factor 'type'
+summary(glm2) #Examining the significance of explanatory variables and the deviance
+```
+\newpage
+**Key points to make**
+
+* All the coefficient estimates for both factors 'year' and 'period' are significant, since the p-values < 0.05
+* Comparing this model to the model with the factor 'type', the AIC has increased from 154.56 to 170.23. **The model with the lower AIC is preferred. AIC = -2ln(L) + 2p, where p is the number of parameters and L is the maximum likelihood. AIC determines the model with the best fit, penalizing for the number of parameters in model**
+* Since the model with 3 factors has lower AIC than model with 2 factors, it is then preferred. i.e., we prefer the model with ship type, year, and period, compared to the model with ship type removed.
+
+
+As an additional check I decided to look at differences in graphical representation of the two models.
+
+```{r echo=FALSE}
+par(mfrow=c(1,2)) #Comparing graphs for both models side-by-side
+plot(glm1, which=c(2),xlab="Theoretical Quantiles - 3Factor Model") #plotting 3 factor model using function plot
+plot(glm2, which=c(2),xlab="Theoretical Quantiles - 2Factor Model") #plotting 2 factor mode using function plot
+```
+
+* Above we have the QQ plot which examines if residuals are normally distributed. If the residuals follow the straight dashed line closely then they're normally distributed.
+* Both models follow the dashed line closely, but the 2 factor model deviates more heavily at the right tail.
+* **Hence, both models have residuals which are roughly normally distributed**
+
+\newpage
+```{r}
+#Same functionality as previous chunk of code
+par(mfrow=c(1,2)) 
+plot(glm1, which=c(1))
+plot(glm2, which=c(1))
+```
+
+* This graphs presents residuals vs fitted values, which checks for non-linearity, unequal error variances and outliers. 
+* We are looking for no visible patterns, with residuals randomly scattered about the mean of 0, which would imply linearity. If a pattern appears, then there exists a non-linear relationship.
+* The graph on the left shows the residuals vs predicted values plot for 3 factor model, while the graph on right represents the same plot for the 2 factor model.
+* Residuals in the plot for 3 factor model looks better as residuals are more within a horizontal band, and the red line is more straight, representing little to no patterns
+* **Hence, 3 factor model better than 2 factor model**
+
+\newpage
+```{r}
+par(mfrow=c(1,2)) 
+plot(glm1, which=c(3))
+plot(glm2, which=c(3))
+```
+
+* Graph on left and right show the Scale-Location plot for the 3 factor and 2 factor model respectively. This graph shows if residuals are spread equal along the ranges of predictors, to check homoscedasticity (i.e., equal variance).
+* Looking for equally and randomly spread points.
+* Both graphs don't show any funnel like shape.
+* **Hence, both models have residuals with equal variance**
+
+\newpage
+```{r}
+par(mfrow=c(1,2)) 
+plot(glm1, which=c(5))
+plot(glm2, which=c(5))
+```
+
+* Graph on left and right show the residuals vs leverage plot for factor 3 and factor 2 model respectively.
+* This graph shows how the spread of standardized residuals changes as the leverage increases. It can be used to detect heteroskedasticity and non-linearity. 
+* The spread of standardized residuals shouldn't change as a function of leverage.
+* For factor 3 model (left graph), the residuals don't seem to have a pattern and are randomly scattered with a horizontal band, but for a 2 factor model (right graph), it appears to decrease, which is not a desirable feature of the model.
+* Secondly, points with a high leverage may be influential, deleting them would change the model a lot. For this, we look at Cook's distance, if points are in the right upper and lower corner they are considered to be influential.
+* There are more influential points in the 2 factor model than 3 factor model
+* **Hence, we prefer the 3 factor to the 2 factor model**
+
+* **In conclusion, using AIC and graphical analysis, I concluded that 3 factor model is more suitable to the 2 factor model**
+
+Next, I checked if there is any interactions between factors. Since the factor type already has insignificant coefficients, then I checked an interaction between the factors year and period.
+```{r}
+glm3 <- glm(formula = incidents ~ factor(type) + factor(year) + factor(period)+factor(year):factor(period), family = poisson, data = shipsnew, offset = log(service))
+summary(glm3)
+```
+* Since the coefficients of the interaction terms all are not significantly contributing to predicting the response variable (as p-values > 0.05), we do not include the interaction term in the model.
+* **Hence, we stick to the original 3 factor model**
+
+**Now, to examine the risk of damage in relation to the three factors, type of ship, year and period. We check this by examining the coefficients and using the formula logE(number of incidents) = linear predictor with offset = (months of service)**
+```{r}
+glm1 <- glm(formula = incidents ~ factor(type) + factor(year) + factor(period), family = poisson, data = shipsnew, offset = log(service))
+summary(glm1)
+```
+* Formula "Call", calls in the code used to create a glm of response variable (incidents) to the predictors (type, period, year), which are all factors
+* Deviance residual is a measure of deviance contributed from each observation. They should be symmetrically scattered about the mean of zero. Median should roughly be zero, i.e., symmetric and normally distributed, implies a correctly specified model
+* Coefficients for factor **type** are not significant (p-value > 0.05) for categories D and E, but does have p-values < 0.05 for categories B and C. This means that the factor type of ship mostly **doesn't** contribute significantly to predicting number of damage incidents.
+* The factors **year** and **period** both have coefficients that all have roughly p-values < 0.05. Hence, this means that the factors year and type **do** contribute significantly to predicting number of damage incidents.
+* The $\chi_{test}$ = 146.328 - 38.695 = 107.633 > $\chi_{crit:df=33-25=8}$ = 15.50731, meaning that we prefer the saturated model to the null model.
+* It's important to note that the estimates of coefficients form a linear predictor $\eta$, which equals to the log of the expected rate of incidents, and not incidents themselves. To get the expected count, we need to multiply the value of $e^\eta$ by the months of service (the offset).
+* The intercept of -6.40590 = $\eta$, where E(incidents) = e^(-6.40590) = .00165. The intercept represents the expected log rate for Type A ship, constructed in the year 60-64, with years of construction 60-74. Expected log count = .00165*127 = .21
+* The following coefficient estimates show the change in the expected log rate as the category for each factor is changed. As we change from one category to another, we add (or subtract) the coefficient to the linear predictor $\eta$ and take the exponential. We then multiply by the months of service for that specific linear predictor to get expected number of incidents.
+* The expected rate of incidents **goes down** as the type of ship changes from A to B, C or D (negative coefficients). The expected rate **goes up** as type changes to ship of type E.
+* Expected incident rate **increases** as construction year changes from category 60-64 to any other category (coefficient estimates are positive).
+* The Expected incident rate **increases** as period of operation changes from 60-74 to 75-79.
+* N.B. To get expected count from expected rate, we multiply expected rate by the offset (months of service)
+
+Lastly, I found the SSE and plotted predicted vs actual incidents for each observation
+```{r}
+shipsnew$prediction <- predict(glm1, shipsnew,type = "response") #fitting the model to the data to try and predict values for the response variable (incidents) for each observation
+#Using a For Loop to calculate the Sum of Squared Errors by iteratively taking the difference squared between every observation in the 'shipsnew' dataset
+SSE <- 0
+for (i in 1:length(shipsnew$type)) {
+  SSE <- SSE + (shipsnew$incidents[i]-shipsnew$prediction[i])^2
+}
+print(SSE)
+```
+
+```{r}
+library(ggplot2)
+ggplot(shipsnew, aes(x=prediction, y=incidents)) +
+  geom_point() +
+  geom_abline(slope = 1,
+              intercept = 0)
+```
+
+```{r}
+#plotting prediction vs fitted values. Perfect prediction is a 45 degree line through the origin. Points closer to the dashed line have been well predicted by the model.
+plot(shipsnew$prediction,shipsnew$incidents, xlab = "Prediction", ylab = "Incidents", main = "Comparing actual to fitted values", pch = 16, cex = .7)
+abline(0,1,lty=2, col="red")
+```
+
