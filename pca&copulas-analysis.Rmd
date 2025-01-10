@@ -1,0 +1,123 @@
+---
+title: "PCA & Copulas Analysis"
+output: word_document
+---
+
+******
+I ran a PCA in R on the AIS (Australian Institute of Sports) dataset. I standardized the data in advance. Described principal components that I believe are required by providing a justification  using proportion of variance captured as the metric.
+
+First read in the data set and get an overview of the main variables. Note that one should install the package sn pre-advance using the command "install.packages("sn").
+```{r message=FALSE, warning=FALSE}
+library(sn) #load in package
+data(ais) #load in data set
+head(ais) #get an overview of variables
+str(ais) #gives detailed breakdown of type of variable 'structure of data set'
+```
+
+Check the variance of each variable.
+```{r}
+apply(ais[,3:13],2,var)
+```
+
+Since, the variances differ substantially for some of the variables we should standardize the data, especially if we have no prior beliefs that the variance of a variable is a measure of its overall importance. Then, we standardize the data, by dividing each numerical variable by its standard deviation. This ensures each variable has a variance of one. Hence, the effects of different variances for the variables won't distort our results.
+```{r}
+#We calculate the standard deviation for each variable. Finally, we divide each variable by the standard deviation and perform principal component analysis on the standardized data set.
+sds <- apply(ais[,3:13], 2, sd)
+ais.std <- sweep(ais[,3:13], 2, sds, "/")
+fit.std <- prcomp(ais.std);fit.std
+```
+* The standard deviations are the square root of the eigenvalues associated with each variable.
+* The rotation matrix is formed from 11 eigenvectors, which each itself is a column of the matrix. The entries of the eigenvector are the appropriate loadings associated with each variable, for each principal component.
+
+However, it's easier to examine the data by looking at the summary of the output of prcomp.
+```{r}
+summary(fit.std); round(fit.std$rotation, 2)
+```
+* As before, the standard dev. is the square root of the eigenvalue.
+* We want to square the standard deviation, and divide it by the sum of total variance of each principal component. This gives us the proportion of variance row.
+* PC1 explains the highest proportion of variance, with each following component decreasingly explaining the variance in the data set.
+* There is a degree of subjectivity in choosing the number of PC (principal components) for our data set. Usually, we would like for roughly 90% of the variation in the data set (the cumulative proportion row) to be explained. There needs to be a balance between capturing variation and parsimony.
+* It looks like the possible number of principal components lies between 4 and 6, with less than 4 PC capturing too little of variation (< 80%), and more than 6 PC not producing a parsimonious model.
+* Once again, the matrix of eigenvectors of the data covariance matrix gives the appropriate loadings for each variable in each component. The signs on loadings don't matter, what's important is that loadings have opposite signs, and their relative magnitude. For example, for PC1, the loadings that have a high magnitude are LBM, Hc, Hg, Wt and RCC. The other original variables don't explain as much variation in PC1 as those 5. PC2 has some loadings of opposite sign to PC1, this makes sense as it explains the additional variance, not already explained by PC1, hence different loadings for original variables are required.
+
+Before we make our decision on the number of principal components necessary to summarize the data, lets plot the proportion of variance explained by each PC
+```{r}
+plot(fit.std, xlab="Principal Component 1 to 11 from left to right", main="Proportion of variance explained by each PC")
+```
+
+* I think that 4 principal components is not enough, cumulatively they explain 87% of the variation in the data.
+* 5 principal components explain 95% of the variation in the data, with the 5th PC explaining an additional 7.2%, which is close to the amount of variation explained by the 4th PC at 8%.
+* Both PC2 and PC3 explain 23% and 10.5% of the variation respectively, hence both are a valid inclusion in our choice for the total number of PC.
+**I decide to choose 5 principal components for the data set, because in combination they capture 94.5% of the variance in the data set, and still trying to keep the dimensionality of the model low for parsimony.**
+
+Finally, we plot the new PC values, by extracting the first 5 principal components and using the pairs function to plot them. 
+```{r}
+new_ais <- predict(fit.std)[,1:5]
+new_ais2 <- data.frame(ais[,1],new_ais)
+pairs(new_ais2[,2:6], col=as.numeric(new_ais2[,1]), main="Split of PC by Female(Black)/Male(Red)")
+```
+
+******
+
+\newpage
+I fit a Gaussian copula in R to the Old Faithful data set and reported on the copula fitted parameters. Furthermore, I simulated data from the fitted copula and compared it with the original observed data for goodness of fit.
+
+First, load in the data set and get a feel for the variables, along with required packages for fitting Gaussian copulas.
+```{r message=FALSE, warning=FALSE}
+library(copula)
+data("faithful")
+head(faithful); dim(faithful) #dim gives the number of observations and variables in the data set
+```
+Let's plot waiting time vs eruption to check for any dependence.
+```{r message=FALSE, warning=FALSE, out.width="50%"}
+attach(faithful)
+plot(waiting, eruptions, xlab="Waiting Time between eruptions", ylab="duration of the eruption", main="Eruptions of the Old Faithful Geyser", col="blue")
+```
+
+We can see that there is some kind of positive correlation between waiting time and eruption duration.
+
+Now, let's fit a Gaussian Copula to this data set and report the fitted parameters.
+```{r}
+normal.cop <- normalCopula(dim=2)
+fit.cop <- fitCopula(normal.cop, pobs(faithful), method="ml")
+#Next lets extract the coefficient
+coef(fit.cop) #Answer is 0.7248874
+```
+
+* The fitted parameter has a value of 0.7248874, which can be considered as adequate.
+
+\newpage
+Now let's simulate data from the fitted copula and compare it with the original observed data for goodness of fit.
+```{r}
+p_obs <- pobs(faithful) #We need to convert the faithful data into pseudo observations so that they lie in the unit square [0,1].
+set.seed(10000)
+u1 <- rCopula(272, normalCopula(coef(fit.cop), dim=2))
+plot(p_obs, main="Plot of Psuedo vs Simulated Observations", xlab="u", ylab="v", col="blue")
+points(u1, col="red")
+legend("topleft", col=c("blue","red"), pch = c(1,1), cex = 0.9, legend=c("Psuedo","Simulated"))
+```
+
+We can see that the simulated values follow the pseudo-observations fairly well. Now we'll compute the AIC and goodness of fit test using the function gofCopula using a 'parametric bootstrap', with the estimation method set as 'ml'.
+```{r warning=FALSE}
+AIC(fit.cop)
+normal.cop.coef <- normalCopula(coef(fit.cop), dim=2)
+gofCopula(normal.cop.coef, as.matrix(faithful), N = 100, estim.method="ml")
+```
+
+* The AIC is quite low and the p-values is less than 0.05. Hence, the fitted Gaussian copula fits the data well.
+
+For comparison, let's fit the Gumbel and t copula for this data set and compare the AIC for all three fitted Copulas
+```{r warning=FALSE}
+gumbel.cop <- gumbelCopula(dim=2)
+fit2 <- fitCopula(gumbel.cop, pobs(faithful), method="ml")
+t.cop <- tCopula(dim=2)
+fit3 <- fitCopula(t.cop, pobs(faithful), methol="ml")
+names <- c("Gaussian copula","Gumbel copula","t copula")
+aic <- c(AIC(fit.cop),AIC(fit2),AIC(fit3))
+compare <- data.frame(names, aic);print(compare)
+```
+As you can see from the above data frame, the Gaussian copula has the lowest AIC, and hence is the most appropriate for the Old Faithful data set.
+
+**Hence, by checking the plot of pseudo to simulated observations, the goodness of fit tests using parametric bootstraps (with the gofCopula function), and the AIC values, we are satisfied with the fit that the Gaussian copula provides**
+
+******
