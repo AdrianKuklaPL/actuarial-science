@@ -1,7 +1,7 @@
 # Actuarial Science
 
 ## Objective
-This repository contains actuarial science analyses and simulations focused on key topics such as profitability modeling, compound Poisson distributions, and statistical inference, mortality analysis, pensions & life insurance modelling. The goal is to explore and apply statistical and probabilistic methods to solve real-world actuarial problems.
+This repository contains actuarial science analyses and simulations focused on key topics such as profitability modeling, compound Poisson distributions, statistical inference, mortality analysis, pensions & life insurance modelling, risk premium calculations for property & casualty insurance. The goal is to explore and apply statistical and probabilistic methods to solve real-world actuarial problems.
 
 ## Technologies Used
 R & RStudio
